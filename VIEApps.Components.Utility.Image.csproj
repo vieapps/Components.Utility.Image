@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net10.0</TargetFrameworks>
+		<WarningLevel>3</WarningLevel>
+		<NoWarn>1573,1591,CA1068,CA1416,NU1902,NU1903</NoWarn>
+		<DocumentationFile>bin/$(Configuration)/$(TargetFramework)/VIEApps.Components.Utility.Image.xml</DocumentationFile>
+		<RootNamespace>net.vieapps.Components.Utility</RootNamespace>
+		<AssemblyName>VIEApps.Components.Utility.Image</AssemblyName>
+		<AssemblyTitle>VIEApps NGX Image Utility</AssemblyTitle>
+		<AssemblyVersion>10.10$(ReleaseVersion)</AssemblyVersion>
+		<FileVersion>10.10$(ReleaseVersion)</FileVersion>
+		<InformationalVersion>10.10.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#sn:$(Sign)#$(ReleaseRevision)</InformationalVersion>
+		<Version>10.10$(ReleaseVersion)$(ReleaseSuffix)</Version>
+		<Product>VIEApps NGX</Product>
+		<Title>VIEApps NGX Image Utility</Title>
+		<Description>The tiny library to help .NET apps working with image (include captcha image) in JPG/PNG/WEBP format.</Description>
+		<Copyright>© $([System.DateTime]::Now.Year) VIEApps.net</Copyright>
+		<Authors>VIEApps.net</Authors>
+		<Company>VIEApps.net</Company>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<SignAssembly>$(Sign)</SignAssembly>
+		<AssemblyOriginatorKeyFile>../VIEApps.Components.snk</AssemblyOriginatorKeyFile>
+		<DefineConstants>$(SignConstant)</DefineConstants>
+		<GeneratePackageOnBuild>$(GeneratePackage)</GeneratePackageOnBuild>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PackageId>VIEApps.Components.Utility.Image$(PackageSuffix)</PackageId>
+		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>Icon.png</PackageIcon>
+		<PackageOutputPath>../</PackageOutputPath>
+		<PackageTags>utility;extensions;vieapps;vieapps.components</PackageTags>
+		<PackageReleaseNotes>Refactor as utility</PackageReleaseNotes>
+		<PackageProjectUrl>https://vieapps.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/vieapps/Components.Utility.Image</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove=".DS_Store" />
+		<None Remove=".gitattributes" />
+		<None Remove=".gitignore" />
+		<None Visible="false" Include="README.md" Pack="true" PackagePath="\" />
+		<None Visible="false" Include="LICENSE.md" Pack="true" PackagePath="\" />
+		<None Visible="false" Include="Icon.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+		<PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
+		<PackageReference Include="SkiaSharp" Version="4.153.1" />
+		<PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+		<PackageReference Include="VIEApps.Components.Utility" Version="10.10.2610.1" />
+	</ItemGroup>
+
+</Project>
