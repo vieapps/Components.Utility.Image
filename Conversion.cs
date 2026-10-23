@@ -368,14 +368,39 @@ namespace net.vieapps.Components.Utility
 		/// </summary>
 		/// <param name="bytes"></param>
 		/// <param name="format"></param>
+		/// <param name="useAdvancedSettings"></param>
+		/// <param name="resizeBigWebpImage"></param>
 		/// <param name="cancellationToken"></param>
 		/// <param name="generator"></param>
 		/// <returns></returns>
-		public static async Task<byte[]> ConvertAsync(this byte[] bytes, string format, CancellationToken cancellationToken = default, string generator = null)
+		public static async Task<byte[]> ConvertAsync(this byte[] bytes, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken = default, string generator = null)
 		{
 			using var inputStream = bytes.ToMemoryStream();
-			using var outputStream = await inputStream.ConvertAsync(format, cancellationToken, generator).ConfigureAwait(false);
+			using var outputStream = await inputStream.ConvertAsync(format, useAdvancedSettings, resizeBigWebpImage, cancellationToken, generator).ConfigureAwait(false);
 			return outputStream.ToBytes();
 		}
+
+		/// <summary>
+		/// Converts this image to other format
+		/// </summary>
+		/// <param name="bytes"></param>
+		/// <param name="format"></param>
+		/// <param name="useAdvancedSettings"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="generator"></param>
+		/// <returns></returns>
+		public static Task<byte[]> ConvertAsync(this byte[] bytes, string format, bool useAdvancedSettings, CancellationToken cancellationToken = default, string generator = null)
+			=> bytes.ConvertAsync(format, useAdvancedSettings, ServiceExtensions.ResizeBigWebpImage, cancellationToken, generator);
+
+		/// <summary>
+		/// Converts this image to other format
+		/// </summary>
+		/// <param name="bytes"></param>
+		/// <param name="format"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="generator"></param>
+		/// <returns></returns>
+		public static Task<byte[]> ConvertAsync(this byte[] bytes, string format, CancellationToken cancellationToken = default, string generator = null)
+			=> bytes.ConvertAsync(format, true, cancellationToken, generator);
 	}
 }
