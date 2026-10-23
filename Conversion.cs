@@ -22,10 +22,13 @@ namespace net.vieapps.Components.Utility
 		/// </summary>
 		public static string Generator { get; set; } = UtilityService.GetAppSetting("Images:Generator", "System.Drawing");
 
+		/// <summary>
+		/// Gets the state of resize big WebP image
+		/// </summary>
+		public static bool ResizeBigWebpImage { get; } = "true".IsEquals(UtilityService.GetAppSetting("Images:WebP:ResizeBigWebpImage", "true"));
+
 		#region Conversion settings
 		const int WebpMaxWidth = 1920;
-
-		public static bool ResizeBigWebpImage { get; } = "true".IsEquals(UtilityService.GetAppSetting("Images:WebP:ResizeBigWebpImage", "true"));
 
 		static int GetQualitySetting(string name, int defaultValue)
 			=> int.TryParse(UtilityService.GetAppSetting(name, defaultValue.ToString()), out var quality) ? Math.Clamp(quality, 1, 100) : defaultValue;
