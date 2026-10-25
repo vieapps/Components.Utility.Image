@@ -13,7 +13,7 @@ using SkiaSharp;
 
 namespace net.vieapps.Components.Utility
 {
-	public static partial class ServiceExtensions
+	public static partial class ImageExtensions
 	{
 
 		#region Generate images
@@ -63,7 +63,7 @@ namespace net.vieapps.Components.Utility
 			return thumbnail.ToMemoryStream();
 		}
 
-		public static MemoryStream GenerateImageByImageSharp(this System.Drawing.Image image, int width, int height, bool asBig)
+		public static MemoryStream GenerateImageByImageSharp(this System.Drawing.Image image, int width, int height, bool asBig, string format = null, bool useAdvancedSettings = true)
 		{
 			if (height < 1)
 			{
@@ -85,7 +85,14 @@ namespace net.vieapps.Components.Utility
 			var outputStream = UtilityService.CreateMemoryStream();
 			try
 			{
-				resized.Save(outputStream, ServiceExtensions.JpegEncoder);
+				var encoder = "WebP".IsSameFormat(format)
+					? useAdvancedSettings ? ImageExtensions.WebpAdvancedEncoder : ImageExtensions.WebpEncoder
+					: "Bmp".IsSameFormat(format)
+						? ImageExtensions.BmpEncoder
+						: "Png".IsSameFormat(format)
+							? ImageExtensions.PngEncoder
+							: ImageExtensions.JpegEncoder;
+				resized.Save(outputStream, encoder);
 				outputStream.Seek(0, SeekOrigin.Begin);
 				return outputStream;
 			}
@@ -96,10 +103,10 @@ namespace net.vieapps.Components.Utility
 			}
 		}
 
-		public static MemoryStream GenerateImageBySkiaSharp(this System.Drawing.Image image, int width, int height, bool asBig)
+		public static MemoryStream GenerateImageBySkiaSharp(this System.Drawing.Image image, int width, int height, bool asBig, string format = null)
 		{
 			using var imageStream = image.ToMemoryStream();
-			using var source = ServiceExtensions.DecodeBitmap(imageStream);
+			using var source = ImageExtensions.DecodeBitmap(imageStream);
 
 			if (height < 1)
 			{
@@ -114,14 +121,14 @@ namespace net.vieapps.Components.Utility
 					width = source.Width;
 			}
 
-			var size = ServiceExtensions.GetFitSize(source.Width, source.Height, width, height);
-			using var resized = ServiceExtensions.ResizeTo(source, size, asBig);
-			return ServiceExtensions.EncodeToStream(resized, "Jpeg", true);
+			var size = ImageExtensions.GetFitSize(source.Width, source.Height, width, height);
+			using var resized = ImageExtensions.ResizeTo(source, size, asBig);
+			return ImageExtensions.EncodeToStream(resized, format ?? "Jpeg", true);
 		}
 		#endregion
 
 		/// <summary>
-		/// Generates an image by the selected generator
+		/// Generates image
 		/// </summary>
 		/// <param name="image"></param>
 		/// <param name="width"></param>
@@ -130,35 +137,44 @@ namespace net.vieapps.Components.Utility
 		/// <param name="generator"></param>
 		/// <returns></returns>
 		public static MemoryStream Generate(this System.Drawing.Image image, int width, int height, bool asBig, string generator = null)
-			=> "ImageSharp".IsEquals(generator ?? ServiceExtensions.Generator)
-				? image.GenerateImageByImageSharp(width, height, asBig)
-				: "SkiaSharp".IsEquals(generator ?? ServiceExtensions.Generator)
-					? image.GenerateImageBySkiaSharp(width, height, asBig)
+			=> "SkiaSharp".IsEquals(generator ?? ImageExtensions.Generator)
+				? image.GenerateImageBySkiaSharp(width, height, asBig)
+				: "ImageSharp".IsEquals(generator ?? ImageExtensions.Generator)
+					? image.GenerateImageByImageSharp(width, height, asBig)
 					: image.GenerateImageBySystemDrawing(width, height, asBig);
 
 		/// <summary>
-		/// Generates an image by the selected generator
+		/// Generates image
 		/// </summary>
+		/// <param name="bytes"></param>
+		/// <param name="format"></param>
+		/// <param name="width"></param>
+		/// <param name="height"></param>
+		/// <param name="asBig"></param>
+		/// <param name="isWebP"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="generator"></param>
+		/// <returns></returns>
 		public static async Task<byte[]> GenerateAsync(this byte[] bytes, string format, int width, int height, bool asBig, bool isWebP, CancellationToken cancellationToken, string generator = null)
 		{
-			if ("SkiaSharp".IsEquals(generator ?? ServiceExtensions.Generator))
+			if ("SkiaSharp".IsEquals(generator ?? ImageExtensions.Generator))
 			{
 				if (width < 1 && height < 1)
 					return isWebP && "WebP".IsSameFormat(format) ? bytes : await bytes.ConvertBySkiaSharpAsync(format, cancellationToken).ConfigureAwait(false);
 
-				return await Task.Run(() =>
-				{
-					using var source = ServiceExtensions.DecodeBitmap(bytes);
-					cancellationToken.ThrowIfCancellationRequested();
+				using var source = ImageExtensions.DecodeBitmap(bytes);
+				cancellationToken.ThrowIfCancellationRequested();
 
-					var size = ServiceExtensions.GetFitSize(source.Width, source.Height, width, height);
-					if ("WebP".IsSameFormat(format) && ServiceExtensions.ResizeBigWebpImage && size.Width > WebpMaxWidth)
-						size = ServiceExtensions.GetFitSize(size.Width, size.Height, WebpMaxWidth, 0);
+				var size = ImageExtensions.GetFitSize(source.Width, source.Height, width, height);
+				if ("WebP".IsSameFormat(format) && ImageExtensions.ResizeBigWebpImage && size.Width > WebpMaxWidth)
+					size = ImageExtensions.GetFitSize(size.Width, size.Height, WebpMaxWidth, 0);
 
-					using var resized = size.Width == source.Width && size.Height == source.Height ? null : ServiceExtensions.ResizeTo(source, size, asBig);
-					using var stream = ServiceExtensions.EncodeToStream(resized ?? source, format, true);
-					return stream.ToBytes();
-				}, cancellationToken).ConfigureAwait(false);
+				cancellationToken.ThrowIfCancellationRequested();
+				using var resized = size.Width == source.Width && size.Height == source.Height ? null : ImageExtensions.ResizeTo(source, size, asBig);
+
+				cancellationToken.ThrowIfCancellationRequested();
+				using var stream = await ImageExtensions.EncodeToStreamAsync(resized ?? source, format, true, cancellationToken).ConfigureAwait(false);
+				return stream.ToBytes();
 			}
 
 			if (width > 0 || height > 0)
@@ -174,11 +190,20 @@ namespace net.vieapps.Components.Utility
 			return isWebP && "WebP".IsSameFormat(format) ? bytes : await bytes.ConvertAsync(format, cancellationToken, generator).ConfigureAwait(false);
 		}
 
+		/// <summary>
+		/// Generates image
+		/// </summary>
+		/// <param name="ex"></param>
+		/// <param name="width"></param>
+		/// <param name="height"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="generator"></param>
+		/// <returns></returns>
 		public static Task<byte[]> GenerateAsync(this Exception ex, int width, int height, CancellationToken cancellationToken, string generator = null)
-			=> "ImageSharp".IsEquals(generator ?? ServiceExtensions.Generator)
-				? ex.GenerateImageByImageSharpAsync(width, height, cancellationToken)
-				: "SkiaSharp".IsEquals(generator ?? ServiceExtensions.Generator)
-					? ex.GenerateImageBySkiaSharpAsync(width, height, cancellationToken)
+			=> "SkiaSharp".IsEquals(generator ?? ImageExtensions.Generator)
+				? ex.GenerateImageBySkiaSharpAsync(width, height, cancellationToken)
+				: "ImageSharp".IsEquals(generator ?? ImageExtensions.Generator)
+					? ex.GenerateImageByImageSharpAsync(width, height, cancellationToken)
 					: ex.GenerateImageBySystemDrawingAsync(width, height, cancellationToken);
 
 		#region Generate images (exceptions)
@@ -203,7 +228,7 @@ namespace net.vieapps.Components.Utility
 			image.Mutate(context => context.DrawText(ex?.Message ?? "Unknown error", font, SixLabors.ImageSharp.Color.Black, new SixLabors.ImageSharp.PointF(20, 40)));
 
 			using var outputStream = UtilityService.CreateMemoryStream();
-			await image.SaveAsync(outputStream, ServiceExtensions.WebpAdvancedEncoder, cancellationToken).ConfigureAwait(false);
+			await image.SaveAsync(outputStream, ImageExtensions.WebpAdvancedEncoder, cancellationToken).ConfigureAwait(false);
 			outputStream.Seek(0, SeekOrigin.Begin);
 			return outputStream.ToBytes();
 		}
@@ -215,12 +240,12 @@ namespace net.vieapps.Components.Utility
 				using (var canvas = new SKCanvas(bitmap))
 				{
 					canvas.Clear(SKColors.White);
-					using var font = new SKFont(ServiceExtensions.GetTypeface("Arial", true), 16);
+					using var font = new SKFont(ImageExtensions.GetTypeface("Arial", true), 16);
 					using var paint = new SKPaint { IsAntialias = true, Color = SKColors.Black };
-					ServiceExtensions.DrawTextAtTop(canvas, ex?.Message ?? "Unknown error", 20, 40, font, paint);
+					ImageExtensions.DrawTextAtTop(canvas, ex?.Message ?? "Unknown error", 20, 40, font, paint);
 				}
 
-				using var stream = ServiceExtensions.EncodeToStream(bitmap, "WebP", true);
+				using var stream = ImageExtensions.EncodeToStream(bitmap, "WebP", true);
 				return stream.ToBytes();
 			}, cancellationToken);
 		#endregion
@@ -234,7 +259,7 @@ namespace net.vieapps.Components.Utility
 				? new[] { System.Drawing.Color.Orange, System.Drawing.Color.Thistle, System.Drawing.Color.LightSeaGreen, System.Drawing.Color.Yellow, System.Drawing.Color.YellowGreen, System.Drawing.Color.NavajoWhite, System.Drawing.Color.White }
 				: [System.Drawing.Color.Orange, System.Drawing.Color.Thistle, System.Drawing.Color.LightSeaGreen, System.Drawing.Color.Violet, System.Drawing.Color.Yellow, System.Drawing.Color.YellowGreen, System.Drawing.Color.NavajoWhite, System.Drawing.Color.LightGray, System.Drawing.Color.Tomato, System.Drawing.Color.LightGreen, System.Drawing.Color.White];
 
-			using var securityBitmap = ServiceExtensions.CreateCaptchaBackroundBySystemDrawing(width, height,
+			using var securityBitmap = ImageExtensions.CreateCaptchaBackroundBySystemDrawing(width, height,
 			[
 				backgroundColors[UtilityService.GetRandomNumber(0, backgroundColors.Length)],
 				backgroundColors[UtilityService.GetRandomNumber(0, backgroundColors.Length)],
@@ -486,7 +511,7 @@ namespace net.vieapps.Components.Utility
 
 			var fontColors = new[] { SixLabors.ImageSharp.Color.Black, SixLabors.ImageSharp.Color.Blue, SixLabors.ImageSharp.Color.DarkBlue, SixLabors.ImageSharp.Color.DarkGreen, SixLabors.ImageSharp.Color.Magenta, SixLabors.ImageSharp.Color.Red, SixLabors.ImageSharp.Color.DarkRed, SixLabors.ImageSharp.Color.Black, SixLabors.ImageSharp.Color.Firebrick, SixLabors.ImageSharp.Color.DarkGreen, SixLabors.ImageSharp.Color.DarkViolet };
 
-			using var background = ServiceExtensions.CreateCaptchaBackroundByImageSharp(width, height,
+			using var background = ImageExtensions.CreateCaptchaBackroundByImageSharp(width, height,
 			[
 				backgroundColors[UtilityService.GetRandomNumber(0, backgroundColors.Length)],
 				backgroundColors[UtilityService.GetRandomNumber(0, backgroundColors.Length)],
@@ -559,7 +584,7 @@ namespace net.vieapps.Components.Utility
 			var stream = UtilityService.CreateMemoryStream();
 			try
 			{
-				distorted.Save(stream, ServiceExtensions.JpegEncoder);
+				distorted.Save(stream, ImageExtensions.JpegEncoder);
 				stream.Seek(0, SeekOrigin.Begin);
 				return stream;
 			}
@@ -606,7 +631,7 @@ namespace net.vieapps.Components.Utility
 		static ConcurrentDictionary<string, SKTypeface> Typefaces { get; } = new ConcurrentDictionary<string, SKTypeface>(StringComparer.OrdinalIgnoreCase);
 
 		static SKTypeface GetTypeface(string family, bool bold)
-			=> ServiceExtensions.Typefaces.GetOrAdd($"{family}|{bold}", _ => SKTypeface.FromFamilyName(family, bold ? SKFontStyle.Bold : SKFontStyle.Normal) ?? SKTypeface.Default);
+			=> ImageExtensions.Typefaces.GetOrAdd($"{family}|{bold}", _ => SKTypeface.FromFamilyName(family, bold ? SKFontStyle.Bold : SKFontStyle.Normal) ?? SKTypeface.Default);
 
 		static void DrawTextAtTop(SKCanvas canvas, string text, float x, float top, SKFont font, SKPaint paint)
 			=> canvas.DrawText(text, x, top - font.Metrics.Ascent, SKTextAlign.Left, font, paint);
@@ -614,11 +639,11 @@ namespace net.vieapps.Components.Utility
 		static SKColor[] ToColors(params string[] hexes)
 			=> hexes.Select(SKColor.Parse).ToArray();
 
-		static SKColor[] SmallCaptchaBackgroundColors { get; } = ServiceExtensions.ToColors("#FFA500", "#D8BFD8", "#20B2AA", "#FFFF00", "#9ACD32", "#FFDEAD", "#FFFFFF");
+		static SKColor[] SmallCaptchaBackgroundColors { get; } = ImageExtensions.ToColors("#FFA500", "#D8BFD8", "#20B2AA", "#FFFF00", "#9ACD32", "#FFDEAD", "#FFFFFF");
 
-		static SKColor[] BigCaptchaBackgroundColors { get; } = ServiceExtensions.ToColors("#FFA500", "#D8BFD8", "#20B2AA", "#EE82EE", "#FFFF00", "#9ACD32", "#FFDEAD", "#D3D3D3", "#FF6347", "#90EE90", "#FFFFFF");
+		static SKColor[] BigCaptchaBackgroundColors { get; } = ImageExtensions.ToColors("#FFA500", "#D8BFD8", "#20B2AA", "#EE82EE", "#FFFF00", "#9ACD32", "#FFDEAD", "#D3D3D3", "#FF6347", "#90EE90", "#FFFFFF");
 
-		static SKColor[] CaptchaFontColors { get; } = ServiceExtensions.ToColors("#000000", "#0000FF", "#00008B", "#006400", "#FF00FF", "#FF0000", "#8B0000", "#000000", "#B22222", "#006400", "#9400D3");
+		static SKColor[] CaptchaFontColors { get; } = ImageExtensions.ToColors("#000000", "#0000FF", "#00008B", "#006400", "#FF00FF", "#FF0000", "#8B0000", "#000000", "#B22222", "#006400", "#9400D3");
 
 		static string[] CaptchaFontNames { get; } = ["Verdana", "Arial", "Times New Roman", "Courier", "Courier New"];
 
@@ -626,9 +651,9 @@ namespace net.vieapps.Components.Utility
 		{
 			var width = isSmall ? 110 : 220;
 			var height = isSmall ? 24 : 48;
-			var backgroundColors = isSmall ? ServiceExtensions.SmallCaptchaBackgroundColors : ServiceExtensions.BigCaptchaBackgroundColors;
+			var backgroundColors = isSmall ? ImageExtensions.SmallCaptchaBackgroundColors : ImageExtensions.BigCaptchaBackgroundColors;
 
-			using var background = ServiceExtensions.CreateCaptchaBackroundBySkiaSharp(width, height,
+			using var background = ImageExtensions.CreateCaptchaBackroundBySkiaSharp(width, height,
 			[
 				backgroundColors[UtilityService.GetRandomNumber(0, backgroundColors.Length)],
 				backgroundColors[UtilityService.GetRandomNumber(0, backgroundColors.Length)],
@@ -652,16 +677,16 @@ namespace net.vieapps.Components.Utility
 				var step = 0;
 				for (var index = 0; index < code.Length; index++)
 				{
-					using var font = new SKFont(ServiceExtensions.GetTypeface(ServiceExtensions.CaptchaFontNames[UtilityService.GetRandomNumber(0, ServiceExtensions.CaptchaFontNames.Length)], true), isSmall ? 16 : 20);
+					using var font = new SKFont(ImageExtensions.GetTypeface(ImageExtensions.CaptchaFontNames[UtilityService.GetRandomNumber(0, ImageExtensions.CaptchaFontNames.Length)], true), isSmall ? 16 : 20);
 					var x = index * 7 + step + UtilityService.GetRandomNumber(-1, 9);
 					var y = UtilityService.GetRandomNumber(-2, 2);
-					textPaint.Color = ServiceExtensions.CaptchaFontColors[UtilityService.GetRandomNumber(0, ServiceExtensions.CaptchaFontColors.Length)];
+					textPaint.Color = ImageExtensions.CaptchaFontColors[UtilityService.GetRandomNumber(0, ImageExtensions.CaptchaFontColors.Length)];
 
 					var writtenCode = code.Substring(index, 1);
 					if (writtenCode.Equals("I") || (UtilityService.GetRandomNumber() % 2 == 1 && !writtenCode.Equals("L")))
 						writtenCode = writtenCode.ToLower();
 
-					ServiceExtensions.DrawTextAtTop(canvas, writtenCode, x, y, font, textPaint);
+					ImageExtensions.DrawTextAtTop(canvas, writtenCode, x, y, font, textPaint);
 					step += UtilityService.GetRandomNumber(13, 23);
 				}
 			}
@@ -688,7 +713,7 @@ namespace net.vieapps.Components.Utility
 					distorted.SetPixel(x, y, background.GetPixel(newX, newY));
 				}
 
-			return ServiceExtensions.EncodeToStream(distorted, "Jpeg", true);
+			return ImageExtensions.EncodeToStream(distorted, "Jpeg", true);
 		}
 
 		static SKBitmap CreateCaptchaBackroundBySkiaSharp(int width, int height, SKColor[] colors)
@@ -732,10 +757,10 @@ namespace net.vieapps.Components.Utility
 		/// <param name="generator"></param>
 		/// <returns></returns>
 		public static MemoryStream Generate(this string code, bool isSmall = true, string generator = null)
-			=> "ImageSharp".IsEquals(generator ?? ServiceExtensions.Generator)
-				? code.GenerateCaptchaByImageSharp(isSmall)
-				: "SkiaSharp".IsEquals(generator ?? ServiceExtensions.Generator)
-					? code.GenerateCaptchaBySkiaSharp(isSmall)
+			=> "SkiaSharp".IsEquals(generator ?? ImageExtensions.Generator)
+				? code.GenerateCaptchaBySkiaSharp(isSmall)
+				: "ImageSharp".IsEquals(generator ?? ImageExtensions.Generator)
+					? code.GenerateCaptchaByImageSharp(isSmall)
 					: code.GenerateCaptchaBySystemDrawing(isSmall);
 
 	}
