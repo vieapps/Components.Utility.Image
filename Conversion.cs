@@ -251,7 +251,7 @@ namespace net.vieapps.Components.Utility
 		/// <param name="resizeBigWebpImage"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<MemoryStream> ConvertImageAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken)
+		public static Task<MemoryStream> ConvertImageAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken = default)
 		{
 			using var bitmap = ImageExtensions.DecodeBitmap(imageStream);
 			cancellationToken.ThrowIfCancellationRequested();
