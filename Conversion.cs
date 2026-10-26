@@ -3,13 +3,6 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Processing;
 using SkiaSharp;
 #endregion
 
@@ -17,18 +10,6 @@ namespace net.vieapps.Components.Utility
 {
 	public static partial class ImageExtensions
 	{
-
-		#region Settings
-		/// <summary>
-		/// Gets or Sets the image generator engine
-		/// </summary>
-		public static string Generator { get; set; } = UtilityService.GetAppSetting("Images:Generator", "SkiaSharp");
-
-		/// <summary>
-		/// Gets or Sets the image converter engine
-		/// </summary>
-		public static string Converter { get; set; } = UtilityService.GetAppSetting("Images:Converter", ImageExtensions.Generator);
-
 		/// <summary>
 		/// Gets or Sets the state for resizing big WebP image
 		/// </summary>
@@ -50,81 +31,7 @@ namespace net.vieapps.Components.Utility
 
 		static bool IsSameFormat(this string format, string other)
 			=> format != null && other != null && format.IsEquals(other);
-		#endregion
 
-		#region ImageSharp conversion
-		static ImageExtensions()
-		{
-			SixLabors.ImageSharp.Configuration.Default.MemoryAllocator = MemoryAllocator.Create(new MemoryAllocatorOptions { MaximumPoolSizeMegabytes = 128 });
-		}
-
-		static IImageEncoder BmpEncoder { get; } = new BmpEncoder();
-
-		static IImageEncoder PngEncoder { get; } = new PngEncoder();
-
-		static IImageEncoder JpegEncoder { get; } = new JpegEncoder();
-
-		static IImageEncoder WebpEncoder { get; } = new WebpEncoder();
-
-		static IImageEncoder WebpAdvancedEncoder { get; } = new WebpEncoder
-		{
-			FileFormat = WebpFileFormatType.Lossy,
-			Method = Enum.TryParse<WebpEncodingMethod>(UtilityService.GetAppSetting("Images:WebP:Method", "Default"), out var method) ? method : WebpEncodingMethod.Default,
-			Quality = 70,
-			NearLosslessQuality = 60
-		};
-
-		static ResizeOptions WebpResizeOptions { get; } = new ResizeOptions
-		{
-			Mode = ResizeMode.Max,
-			Size = new SixLabors.ImageSharp.Size(WebpMaxWidth, 0),
-			Sampler = KnownResamplers.Lanczos3
-		};
-
-		public static async Task<MemoryStream> ConvertByImageSharpAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken)
-		{
-			imageStream.Seek(0, SeekOrigin.Begin);
-			using var image = await SixLabors.ImageSharp.Image.LoadAsync(imageStream, cancellationToken).ConfigureAwait(false);
-
-			if (useAdvancedSettings)
-			{
-				image.Mutate(context =>
-				{
-					context.AutoOrient();
-					if ("WebP".IsSameFormat(format) && image.Width > WebpMaxWidth && resizeBigWebpImage)
-						context.Resize(ImageExtensions.WebpResizeOptions);
-				});
-
-				image.Metadata.ExifProfile = null;
-				image.Metadata.IccProfile = null;
-				image.Metadata.XmpProfile = null;
-				image.Metadata.IptcProfile = null;
-			}
-
-			var encoder = "WebP".IsSameFormat(format)
-				? useAdvancedSettings ? ImageExtensions.WebpAdvancedEncoder : ImageExtensions.WebpEncoder
-				: "Bmp".IsSameFormat(format)
-					? ImageExtensions.BmpEncoder
-					: "Png".IsSameFormat(format)
-						? ImageExtensions.PngEncoder
-						: ImageExtensions.JpegEncoder;
-
-			var outputStream = UtilityService.CreateMemoryStream();
-			try
-			{
-				await image.SaveAsync(outputStream, encoder, cancellationToken).ConfigureAwait(false);
-				outputStream.Seek(0, SeekOrigin.Begin);
-				return outputStream;
-			}
-			catch
-			{
-				outputStream.Dispose();
-				throw;
-			}
-		}
-		#endregion
-
-		#region SkiaSharp conversion
 		static SKBitmap DecodeBitmap(Stream stream)
 		{
 			stream.Seek(0, SeekOrigin.Begin);
@@ -165,8 +72,8 @@ namespace net.vieapps.Components.Utility
 			var height = source.Height;
 			var swap = origin == SKEncodedOrigin.LeftTop || origin == SKEncodedOrigin.RightTop || origin == SKEncodedOrigin.RightBottom || origin == SKEncodedOrigin.LeftBottom;
 			var target = new SKBitmap(source.Info.WithSize(swap ? height : width, swap ? width : height));
-			using var canvas = new SKCanvas(target);
 
+			using var canvas = new SKCanvas(target);
 			switch (origin)
 			{
 				case SKEncodedOrigin.TopRight:
@@ -324,9 +231,9 @@ namespace net.vieapps.Components.Utility
 
 		static Task<MemoryStream> EncodeToStreamAsync(SKBitmap bitmap, string format, bool useAdvancedSettings, CancellationToken cancellationToken)
 		{
-			cancellationToken.ThrowIfCancellationRequested();
 			try
 			{
+				cancellationToken.ThrowIfCancellationRequested();
 				return Task.FromResult(ImageExtensions.EncodeToStream(bitmap, format, useAdvancedSettings));
 			}
 			catch (Exception ex)
@@ -335,54 +242,36 @@ namespace net.vieapps.Components.Utility
 			}
 		}
 
-		public static Task<MemoryStream> ConvertBySkiaSharpAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken)
+		/// <summary>
+		/// Converts this image to other format
+		/// </summary>
+		/// <param name="imageStream"></param>
+		/// <param name="format"></param>
+		/// <param name="useAdvancedSettings"></param>
+		/// <param name="resizeBigWebpImage"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task<MemoryStream> ConvertImageAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken)
 		{
 			using var bitmap = ImageExtensions.DecodeBitmap(imageStream);
 			cancellationToken.ThrowIfCancellationRequested();
-			if (useAdvancedSettings && resizeBigWebpImage && bitmap.Width > WebpMaxWidth && "WebP".IsSameFormat(format))
+			if (useAdvancedSettings && resizeBigWebpImage && bitmap.Width > ImageExtensions.WebpMaxWidth && "WebP".IsSameFormat(format))
 			{
-				using var resized = ImageExtensions.ResizeTo(bitmap, ImageExtensions.GetFitSize(bitmap.Width, bitmap.Height, WebpMaxWidth, 0), true);
+				using var resized = ImageExtensions.ResizeTo(bitmap, ImageExtensions.GetFitSize(bitmap.Width, bitmap.Height, ImageExtensions.WebpMaxWidth, 0), true);
 				return ImageExtensions.EncodeToStreamAsync(resized, format, useAdvancedSettings, cancellationToken);
 			}
 			return ImageExtensions.EncodeToStreamAsync(bitmap, format, useAdvancedSettings, cancellationToken);
 		}
 
-		public static Task<MemoryStream> ConvertBySkiaSharpAsync(this Stream imageStream, string format, CancellationToken cancellationToken)
-			=> imageStream.ConvertBySkiaSharpAsync(format, true, ImageExtensions.ResizeBigWebpImage, cancellationToken);
-
-		public static async Task<byte[]> ConvertBySkiaSharpAsync(this byte[] bytes, string format, CancellationToken cancellationToken)
-		{
-			using var inputStream = bytes.ToMemoryStream();
-			using var outputStream = await inputStream.ConvertBySkiaSharpAsync(format, cancellationToken).ConfigureAwait(false);
-			return outputStream.ToBytes();
-		}
-		#endregion
-
-		/// <summary>
-		/// Converts this image to other format
-		/// </summary>
-		/// <param name="imageStream"></param>
-		/// <param name="format"></param>
-		/// <param name="useAdvancedSettings"></param>
-		/// <param name="resizeBigWebpImage"></param>
-		/// <param name="cancellationToken"></param>
-		/// <param name="converter"></param>
-		/// <returns></returns>
-		public static Task<MemoryStream> ConvertAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken, string converter = null)
-			=> "ImageSharp".IsEquals(converter ?? ImageExtensions.Converter)
-				? imageStream.ConvertByImageSharpAsync(format, useAdvancedSettings, resizeBigWebpImage, cancellationToken)
-				: imageStream.ConvertBySkiaSharpAsync(format, useAdvancedSettings, resizeBigWebpImage, cancellationToken);
-
 		/// <summary>
 		/// Converts this image to other format
 		/// </summary>
 		/// <param name="imageStream"></param>
 		/// <param name="format"></param>
 		/// <param name="cancellationToken"></param>
-		/// <param name="converter"></param>
 		/// <returns></returns>
-		public static Task<MemoryStream> ConvertAsync(this Stream imageStream, string format, CancellationToken cancellationToken = default, string converter = null)
-			=> imageStream.ConvertAsync(format, true, ImageExtensions.ResizeBigWebpImage, cancellationToken, converter);
+		public static Task<MemoryStream> ConvertImageAsync(this Stream imageStream, string format, CancellationToken cancellationToken = default)
+			=> imageStream.ConvertImageAsync(format, true, ImageExtensions.ResizeBigWebpImage, cancellationToken);
 
 		/// <summary>
 		/// Converts this image to other format
@@ -392,12 +281,11 @@ namespace net.vieapps.Components.Utility
 		/// <param name="useAdvancedSettings"></param>
 		/// <param name="resizeBigWebpImage"></param>
 		/// <param name="cancellationToken"></param>
-		/// <param name="converter"></param>
 		/// <returns></returns>
-		public static async Task<byte[]> ConvertAsync(this byte[] bytes, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken = default, string converter = null)
+		public static async Task<byte[]> ConvertImageAsync(this byte[] bytes, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken = default)
 		{
 			using var inputStream = bytes.ToMemoryStream();
-			using var outputStream = await inputStream.ConvertAsync(format, useAdvancedSettings, resizeBigWebpImage, cancellationToken, converter).ConfigureAwait(false);
+			using var outputStream = await inputStream.ConvertImageAsync(format, useAdvancedSettings, resizeBigWebpImage, cancellationToken).ConfigureAwait(false);
 			return outputStream.ToBytes();
 		}
 
@@ -408,10 +296,9 @@ namespace net.vieapps.Components.Utility
 		/// <param name="format"></param>
 		/// <param name="useAdvancedSettings"></param>
 		/// <param name="cancellationToken"></param>
-		/// <param name="converter"></param>
 		/// <returns></returns>
-		public static Task<byte[]> ConvertAsync(this byte[] bytes, string format, bool useAdvancedSettings, CancellationToken cancellationToken = default, string converter = null)
-			=> bytes.ConvertAsync(format, useAdvancedSettings, ImageExtensions.ResizeBigWebpImage, cancellationToken, converter);
+		public static Task<byte[]> ConvertImageAsync(this byte[] bytes, string format, bool useAdvancedSettings, CancellationToken cancellationToken = default)
+			=> bytes.ConvertImageAsync(format, useAdvancedSettings, ImageExtensions.ResizeBigWebpImage, cancellationToken);
 
 		/// <summary>
 		/// Converts this image to other format
@@ -419,9 +306,8 @@ namespace net.vieapps.Components.Utility
 		/// <param name="bytes"></param>
 		/// <param name="format"></param>
 		/// <param name="cancellationToken"></param>
-		/// <param name="converter"></param>
 		/// <returns></returns>
-		public static Task<byte[]> ConvertAsync(this byte[] bytes, string format, CancellationToken cancellationToken = default, string converter = null)
-			=> bytes.ConvertAsync(format, true, cancellationToken, converter);
+		public static Task<byte[]> ConvertImageAsync(this byte[] bytes, string format, CancellationToken cancellationToken = default)
+			=> bytes.ConvertImageAsync(format, true, cancellationToken);
 	}
 }
