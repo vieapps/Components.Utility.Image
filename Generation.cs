@@ -27,7 +27,7 @@ namespace net.vieapps.Components.Utility
 			if (width < 1 && height < 1)
 				return isWebP && "WebP".IsSameFormat(format) ? bytes : await bytes.ConvertImageAsync(format, cancellationToken).ConfigureAwait(false);
 
-			using var source = ImageExtensions.DecodeBitmap(bytes);
+			using var source = bytes.DecodeBitmap();
 			cancellationToken.ThrowIfCancellationRequested();
 
 			var size = ImageExtensions.GetFitSize(source.Width, source.Height, width, height);
@@ -38,7 +38,7 @@ namespace net.vieapps.Components.Utility
 			using var resized = size.Width == source.Width && size.Height == source.Height ? null : ImageExtensions.ResizeTo(source, size, asBig);
 
 			cancellationToken.ThrowIfCancellationRequested();
-			using var stream = await ImageExtensions.EncodeToStreamAsync(resized ?? source, format, true, cancellationToken).ConfigureAwait(false);
+			using var stream = await (resized ?? source).EncodeToStreamAsync(format, true, cancellationToken).ConfigureAwait(false);
 			return stream.ToBytes();
 		}
 
@@ -66,7 +66,7 @@ namespace net.vieapps.Components.Utility
 		public static byte[] GenerateImage(this Exception ex, int width, int height, string format = "WebP")
 		{
 			using var bitmap = ex.GenerateBitmap(width, height);
-			using var stream = ImageExtensions.EncodeToStream(bitmap, format ?? "WebP", true);
+			using var stream = bitmap.EncodeToStream(format ?? "WebP", true);
 			return stream.ToBytes();
 		}
 
@@ -82,7 +82,7 @@ namespace net.vieapps.Components.Utility
 		public static async Task<byte[]> GenerateImageAsync(this Exception ex, int width, int height, string format = "WebP", CancellationToken cancellationToken = default)
 		{
 			using var bitmap = ex.GenerateBitmap(width, height);
-			using var stream = await ImageExtensions.EncodeToStreamAsync(bitmap, format ?? "WebP", true, cancellationToken).ConfigureAwait(false);
+			using var stream = await bitmap.EncodeToStreamAsync(format ?? "WebP", true, cancellationToken).ConfigureAwait(false);
 			return stream.ToBytes();
 		}
 
@@ -216,7 +216,7 @@ namespace net.vieapps.Components.Utility
 		public static byte[] GenerateImage(this string code, bool isSmall = true, string format = "WebP")
 		{
 			using var bitmap = code.GenerateBitmap(isSmall);
-			using var stream = ImageExtensions.EncodeToStream(bitmap, format, true);
+			using var stream = bitmap.EncodeToStream(format, true);
 			return stream.ToBytes();
 		}
 
@@ -230,7 +230,7 @@ namespace net.vieapps.Components.Utility
 		public static async Task<byte[]> GenerateImageAsync(this string code, bool isSmall = true, string format = "WebP", CancellationToken cancellationToken = default)
 		{
 			using var bitmap = code.GenerateBitmap(isSmall);
-			using var stream = await ImageExtensions.EncodeToStreamAsync(bitmap, format, true, cancellationToken).ConfigureAwait(false);
+			using var stream = await bitmap.EncodeToStreamAsync(format, true, cancellationToken).ConfigureAwait(false);
 			return stream.ToBytes();
 		}
 	}

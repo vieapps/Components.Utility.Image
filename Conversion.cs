@@ -32,20 +32,20 @@ namespace net.vieapps.Components.Utility
 		static bool IsSameFormat(this string format, string other)
 			=> format != null && other != null && format.IsEquals(other);
 
-		static SKBitmap DecodeBitmap(Stream stream)
+		static SKBitmap DecodeBitmap(this Stream stream)
 		{
 			stream.Seek(0, SeekOrigin.Begin);
 			using var data = SKData.Create(stream);
-			return ImageExtensions.DecodeBitmap(data);
+			return data.DecodeBitmap();
 		}
 
-		static SKBitmap DecodeBitmap(byte[] bytes)
+		static SKBitmap DecodeBitmap(this byte[] bytes)
 		{
 			using var data = SKData.CreateCopy(bytes);
-			return ImageExtensions.DecodeBitmap(data);
+			return data.DecodeBitmap();
 		}
 
-		static SKBitmap DecodeBitmap(SKData data)
+		static SKBitmap DecodeBitmap(this SKData data)
 		{
 			using var codec = SKCodec.Create(data) ?? throw new InvalidDataException("The data is not a supported image or the image is corrupted");
 			var info = codec.Info;
@@ -58,7 +58,7 @@ namespace net.vieapps.Components.Utility
 
 			try
 			{
-				return ImageExtensions.ApplyOrigin(bitmap, origin);
+				return bitmap.ApplyOrigin(origin);
 			}
 			finally
 			{
@@ -66,7 +66,7 @@ namespace net.vieapps.Components.Utility
 			}
 		}
 
-		static SKBitmap ApplyOrigin(SKBitmap source, SKEncodedOrigin origin)
+		static SKBitmap ApplyOrigin(this SKBitmap source, SKEncodedOrigin origin)
 		{
 			var width = source.Width;
 			var height = source.Height;
@@ -124,13 +124,13 @@ namespace net.vieapps.Components.Utility
 			return new SKSizeI(Math.Max(1, (int)Math.Round(sourceWidth * scale)), Math.Max(1, (int)Math.Round(sourceHeight * scale)));
 		}
 
-		static SKBitmap ResizeTo(SKBitmap source, SKSizeI size, bool highQuality)
+		static SKBitmap ResizeTo(this SKBitmap source, SKSizeI size, bool highQuality)
 		{
 			var sampling = (double)size.Width / source.Width < 0.5 ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear) : new SKSamplingOptions(highQuality ? SKCubicResampler.CatmullRom : SKCubicResampler.Mitchell);
 			return source.Resize(source.Info.WithSize(size.Width, size.Height), sampling) ?? throw new InvalidOperationException("Cannot resize the image");
 		}
 
-		static SKBitmap FlattenOnWhite(SKBitmap source)
+		static SKBitmap FlattenOnWhite(this SKBitmap source)
 		{
 			var flattened = new SKBitmap(new SKImageInfo(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Opaque));
 			using var canvas = new SKCanvas(flattened);
@@ -139,7 +139,7 @@ namespace net.vieapps.Components.Utility
 			return flattened;
 		}
 
-		static byte[] EncodeBmp(SKBitmap source)
+		static byte[] EncodeBmp(this SKBitmap source)
 		{
 			using var converted = source.ColorType == SKColorType.Bgra8888 ? null : source.Copy(SKColorType.Bgra8888);
 			var bitmap = converted ?? source;
@@ -189,7 +189,7 @@ namespace net.vieapps.Components.Utility
 			return stream.ToArray();
 		}
 
-		static MemoryStream EncodeToStream(SKBitmap bitmap, string format, bool useAdvancedSettings)
+		static MemoryStream EncodeToStream(this SKBitmap bitmap, string format, bool useAdvancedSettings)
 		{
 			var stream = UtilityService.CreateMemoryStream();
 			try
@@ -208,13 +208,13 @@ namespace net.vieapps.Components.Utility
 				}
 				else if ("Bmp".IsSameFormat(format))
 				{
-					using var flattened = bitmap.AlphaType == SKAlphaType.Opaque ? null : ImageExtensions.FlattenOnWhite(bitmap);
+					using var flattened = bitmap.AlphaType == SKAlphaType.Opaque ? null : bitmap.FlattenOnWhite();
 					var bytes = ImageExtensions.EncodeBmp(flattened ?? bitmap);
 					stream.Write(bytes, 0, bytes.Length);
 				}
 				else
 				{
-					using var flattened = bitmap.AlphaType == SKAlphaType.Opaque ? null : ImageExtensions.FlattenOnWhite(bitmap);
+					using var flattened = bitmap.AlphaType == SKAlphaType.Opaque ? null : bitmap.FlattenOnWhite();
 					using var image = SKImage.FromBitmap(flattened ?? bitmap);
 					using var data = image.Encode(SKEncodedImageFormat.Jpeg, ImageExtensions.JpegQuality) ?? throw new InvalidOperationException("Cannot encode the image as JPEG");
 					data.SaveTo(stream);
@@ -229,12 +229,12 @@ namespace net.vieapps.Components.Utility
 			}
 		}
 
-		static Task<MemoryStream> EncodeToStreamAsync(SKBitmap bitmap, string format, bool useAdvancedSettings, CancellationToken cancellationToken)
+		static Task<MemoryStream> EncodeToStreamAsync(this SKBitmap bitmap, string format, bool useAdvancedSettings, CancellationToken cancellationToken)
 		{
 			try
 			{
 				cancellationToken.ThrowIfCancellationRequested();
-				return Task.FromResult(ImageExtensions.EncodeToStream(bitmap, format, useAdvancedSettings));
+				return Task.FromResult(bitmap.EncodeToStream(format, useAdvancedSettings));
 			}
 			catch (Exception ex)
 			{
@@ -253,14 +253,14 @@ namespace net.vieapps.Components.Utility
 		/// <returns></returns>
 		public static Task<MemoryStream> ConvertImageAsync(this Stream imageStream, string format, bool useAdvancedSettings, bool resizeBigWebpImage, CancellationToken cancellationToken = default)
 		{
-			using var bitmap = ImageExtensions.DecodeBitmap(imageStream);
+			using var bitmap = imageStream.DecodeBitmap();
 			cancellationToken.ThrowIfCancellationRequested();
 			if (useAdvancedSettings && resizeBigWebpImage && bitmap.Width > ImageExtensions.WebpMaxWidth && "WebP".IsSameFormat(format))
 			{
-				using var resized = ImageExtensions.ResizeTo(bitmap, ImageExtensions.GetFitSize(bitmap.Width, bitmap.Height, ImageExtensions.WebpMaxWidth, 0), true);
-				return ImageExtensions.EncodeToStreamAsync(resized, format, useAdvancedSettings, cancellationToken);
+				using var resized = bitmap.ResizeTo(ImageExtensions.GetFitSize(bitmap.Width, bitmap.Height, ImageExtensions.WebpMaxWidth, 0), true);
+				return resized.EncodeToStreamAsync(format, useAdvancedSettings, cancellationToken);
 			}
-			return ImageExtensions.EncodeToStreamAsync(bitmap, format, useAdvancedSettings, cancellationToken);
+			return bitmap.EncodeToStreamAsync(format, useAdvancedSettings, cancellationToken);
 		}
 
 		/// <summary>
