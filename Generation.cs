@@ -44,15 +44,23 @@ namespace net.vieapps.Components.Utility
 
 		static SKBitmap GenerateBitmap(this Exception ex, int width, int height)
 		{
-			using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
-			using (var canvas = new SKCanvas(bitmap))
+			var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
+			try
 			{
-				canvas.Clear(SKColors.White);
-				using var font = new SKFont(ImageExtensions.GetTypeface("Arial", true), 16);
-				using var paint = new SKPaint { IsAntialias = true, Color = SKColors.Black };
-				ImageExtensions.DrawTextAtTop(canvas, ex?.Message ?? "Unknown error", 20, 40, font, paint);
+				using (var canvas = new SKCanvas(bitmap))
+				{
+					canvas.Clear(SKColors.White);
+					using var font = new SKFont(ImageExtensions.GetTypeface("Arial", true), 16);
+					using var paint = new SKPaint { IsAntialias = true, Color = SKColors.Black };
+					ImageExtensions.DrawTextAtTop(canvas, ex?.Message ?? "Unknown error", 20, 40, font, paint);
+				}
+				return bitmap;
 			}
-			return bitmap;
+			catch
+			{
+				bitmap.Dispose();
+				throw;
+			}
 		}
 
 		/// <summary>
@@ -86,7 +94,7 @@ namespace net.vieapps.Components.Utility
 			return stream.ToBytes();
 		}
 
-		static ConcurrentDictionary<string, SKTypeface> Typefaces { get; } = new ConcurrentDictionary<string, SKTypeface>(StringComparer.OrdinalIgnoreCase);
+		static ConcurrentDictionary<string, SKTypeface> Typefaces { get; } = new(StringComparer.OrdinalIgnoreCase);
 
 		static SKTypeface GetTypeface(string family, bool bold)
 			=> ImageExtensions.Typefaces.GetOrAdd($"{family}|{bold}", _ => SKTypeface.FromFamilyName(family, bold ? SKFontStyle.Bold : SKFontStyle.Normal) ?? SKTypeface.Default);
@@ -189,21 +197,28 @@ namespace net.vieapps.Components.Utility
 
 			var divideTo = 64.0d + UtilityService.GetRandomNumber(1, 10);
 			var distortion = isSmall ? UtilityService.GetRandomNumber(1, 5) : UtilityService.GetRandomNumber(5, 11);
-			using var distorted = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
 
-			for (var y = 0; y < height; y++)
-				for (var x = 0; x < width; x++)
-				{
-					var newX = (int)(x + distortion * Math.Sin(Math.PI * y / divideTo));
-					var newY = (int)(y + distortion * Math.Cos(Math.PI * x / divideTo));
-					if (newX < 0 || newX >= width)
-						newX = 0;
-					if (newY < 0 || newY >= height)
-						newY = 0;
-					distorted.SetPixel(x, y, background.GetPixel(newX, newY));
-				}
-
-			return distorted;
+			var distorted = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
+			try
+			{
+				for (var y = 0; y < height; y++)
+					for (var x = 0; x < width; x++)
+					{
+						var newX = (int)(x + distortion * Math.Sin(Math.PI * y / divideTo));
+						var newY = (int)(y + distortion * Math.Cos(Math.PI * x / divideTo));
+						if (newX < 0 || newX >= width)
+							newX = 0;
+						if (newY < 0 || newY >= height)
+							newY = 0;
+						distorted.SetPixel(x, y, background.GetPixel(newX, newY));
+					}
+				return distorted;
+			}
+			catch
+			{
+				distorted.Dispose();
+				throw;
+			}
 		}
 
 		/// <summary>
