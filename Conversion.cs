@@ -139,7 +139,7 @@ namespace net.vieapps.Components.Utility
 			return flattened;
 		}
 
-		static byte[] EncodeBmp(this SKBitmap source)
+		static MemoryStream EncodeBmp(this SKBitmap source)
 		{
 			using var converted = source.ColorType == SKColorType.Bgra8888 ? null : source.Copy(SKColorType.Bgra8888);
 			var bitmap = converted ?? source;
@@ -149,44 +149,41 @@ namespace net.vieapps.Components.Utility
 			var rowBytes = bitmap.RowBytes;
 			var rowSize = checked((width * 3 + 3) & ~3);
 			var dataSize = checked(rowSize * height);
+			var stream = UtilityService.CreateMemoryStream("bmp", checked(54 + dataSize));
+			using var writer = new BinaryWriter(stream, System.Text.Encoding.ASCII, true);
+			writer.Write((ushort)0x4D42);
+			writer.Write((uint)(54 + dataSize));
+			writer.Write(0u);
+			writer.Write(54u);
 
-			using var stream = new MemoryStream(checked(54 + dataSize));
-			using (var writer = new BinaryWriter(stream, System.Text.Encoding.ASCII, true))
+			writer.Write(40u);
+			writer.Write(width);
+			writer.Write(height);
+			writer.Write((ushort)1);
+			writer.Write((ushort)24);
+			writer.Write(0u);
+			writer.Write((uint)dataSize);
+			writer.Write(2835);
+			writer.Write(2835);
+			writer.Write(0u);
+			writer.Write(0u);
+
+			var pixels = bitmap.GetPixelSpan();
+			var row = new byte[rowSize];
+
+			for (var y = height - 1; y >= 0; y--)
 			{
-				writer.Write((ushort)0x4D42);
-				writer.Write((uint)(54 + dataSize));
-				writer.Write(0u);
-				writer.Write(54u);
-
-				writer.Write(40u);
-				writer.Write(width);
-				writer.Write(height);
-				writer.Write((ushort)1);
-				writer.Write((ushort)24);
-				writer.Write(0u);
-				writer.Write((uint)dataSize);
-				writer.Write(2835);
-				writer.Write(2835);
-				writer.Write(0u);
-				writer.Write(0u);
-
-				var pixels = bitmap.GetPixelSpan();
-				var row = new byte[rowSize];
-
-				for (var y = height - 1; y >= 0; y--)
+				var line = pixels.Slice(y * rowBytes, width * 4);
+				for (var x = 0; x < width; x++)
 				{
-					var line = pixels.Slice(y * rowBytes, width * 4);
-					for (var x = 0; x < width; x++)
-					{
-						var padding = hasAlpha ? 255 - line[x * 4 + 3] : 0;
-						row[x * 3] = (byte)Math.Min(255, line[x * 4] + padding);
-						row[x * 3 + 1] = (byte)Math.Min(255, line[x * 4 + 1] + padding);
-						row[x * 3 + 2] = (byte)Math.Min(255, line[x * 4 + 2] + padding);
-					}
-					writer.Write(row);
+					var padding = hasAlpha ? 255 - line[x * 4 + 3] : 0;
+					row[x * 3] = (byte)Math.Min(255, line[x * 4] + padding);
+					row[x * 3 + 1] = (byte)Math.Min(255, line[x * 4 + 1] + padding);
+					row[x * 3 + 2] = (byte)Math.Min(255, line[x * 4 + 2] + padding);
 				}
+				writer.Write(row);
 			}
-			return stream.ToArray();
+			return stream;
 		}
 
 		static MemoryStream EncodeToStream(this SKBitmap bitmap, string format, bool useAdvancedSettings)
@@ -209,8 +206,7 @@ namespace net.vieapps.Components.Utility
 				else if ("Bmp".IsSameFormat(format))
 				{
 					using var flattened = bitmap.AlphaType == SKAlphaType.Opaque ? null : bitmap.FlattenOnWhite();
-					var bytes = ImageExtensions.EncodeBmp(flattened ?? bitmap);
-					stream.Write(bytes, 0, bytes.Length);
+					stream = ImageExtensions.EncodeBmp(flattened ?? bitmap);
 				}
 				else
 				{
